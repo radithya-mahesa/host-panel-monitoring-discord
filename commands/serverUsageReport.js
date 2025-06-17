@@ -1,178 +1,21 @@
-require('dotenv').config(); // Loads environment variables from a .env file
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-const fetch = require('node-fetch');
-
+import 'dotenv/config'; 
+import { EmbedBuilder } from 'discord.js';
+import fetch from 'node-fetch';
+import client from '../client.js';
 const APPLICATION_API_URL = 'https://panel.gta-samp.my.id/api/application/servers';
 const CLIENT_API_BASE_URL = 'https://panel.gta-samp.my.id/api/client/servers';
 
 const PTERODACTYL_APPLICATION_API_KEY = process.env.PTERODACTYL_APPLICATION_API_KEY;
 const PTERODACTYL_CLIENT_API_KEY = process.env.PTERODACTYL_CLIENT_API_KEY;
 
-const DISCORD_API = process.env.DISCORD_API;
 const CHANNEL_ID = process.env.CHANNEL_ID;
-
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
-});
-
 /**
  * Fetches server status from Pterodactyl Application API and sends a summarized update to Discord.
  */
-async function getServersStatusAndSendToDiscord() {
+
+export async function getServersResourceUsageAndSendToDiscord() {
     const startTime = Date.now();
-
-    const channel = client.channels.cache.get(CHANNEL_ID);
-    if (!channel) {
-        console.error("Channel not found! Please check CHANNEL_ID in your .env file.");
-        return;
-    }
-
-    if (!PTERODACTYL_APPLICATION_API_KEY) {
-        console.error("PTERODACTYL_APPLICATION_API_KEY is not set in your .env file. Cannot fetch server status.");
-        channel.send({
-            embeds: [
-                new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('❌ Konfigurasi API Error')
-                .setDescription('`PTERODACTYL_APPLICATION_API_KEY` tidak ditemukan. Mohon cek file `.env` Anda.')
-                .setFooter({
-                    text: `Update terakhir pada ${new Date().toLocaleString('id-ID', {
-                        timeZone: 'Asia/Jakarta'
-                    })}`
-                })
-            ]
-        });
-        return;
-    }
-
-    try {
-        const response = await fetch(APPLICATION_API_URL, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${PTERODACTYL_APPLICATION_API_KEY}`
-            },
-        });
-
-        const endTime = Date.now();
-        const pingTime = endTime - startTime;
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Error fetching server data from Application API: ${response.status} - ${errorText}`);
-            const embed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('❌ Gagal Memuat Status Pterodactyl (Application API)')
-                .setDescription(`Terjadi kesalahan saat mengambil data dari panel.\n\`\`\`${response.status} ${response.statusText}\n${errorText.substring(0, 200)}...\`\`\``)
-                .addFields({
-                    name: 'API Ping',
-                    value: `\`${pingTime}ms\``,
-                    inline: true
-                })
-                .setFooter({
-                    text: `Update terakhir pada ${new Date().toLocaleString('id-ID', {
-                        timeZone: 'Asia/Jakarta'
-                    })}`
-                });
-
-            channel.send({
-                embeds: [embed]
-            });
-            return;
-        }
-
-        const data = await response.json();
-        const totalServers = data.data.length;
-
-        let onlineServers = 0;
-        let offlineServers = 0;
-        let startingStoppingServers = 0;
-        let suspendedServers = 0;
-
-        data.data.forEach(server => {
-            const status = server.attributes.status;
-            if (status === 'running') {
-                onlineServers++;
-            } else if (status === 'offline') {
-                offlineServers++;
-            } else if (status === 'starting' || status === 'stopping' || status === 'installing') {
-                startingStoppingServers++;
-            } else if (status === 'suspended') {
-                suspendedServers++;
-            }
-        });
-
-        let embedColor = 0x00FF00;
-        if (offlineServers > 0 || suspendedServers > 0) {
-            embedColor = 0xFFCC00;
-        }
-        if (offlineServers === totalServers && totalServers > 0) {
-            embedColor = 0xFF0000;
-        }
-
-        const statusEmbed = new EmbedBuilder()
-            .setColor(embedColor)
-            .setTitle('🚀 **Status Pterodactyl Panel** 🚀')
-            .addFields({
-                name: 'Total Server',
-                value: `\`${totalServers}\``,
-                inline: true
-            }, {
-                name: 'Server Online',
-                value: `\`${onlineServers}\``,
-                inline: true
-            }, {
-                name: 'Server Offline',
-                value: `\`${offlineServers}\``,
-                inline: true
-            }, {
-                name: 'Server Lain (Starting/Stopping/Suspended)',
-                value: `\`${startingStoppingServers + suspendedServers}\``,
-                inline: true
-            }, {
-                name: 'API Latency',
-                value: `\`${pingTime}ms\``,
-                inline: true
-            })
-            .setFooter({
-                text: `Update terakhir pada ${new Date().toLocaleString('id-ID', {
-                    timeZone: 'Asia/Jakarta'
-                })}`
-            })
-            .setTimestamp();
-
-        channel.send({
-            embeds: [statusEmbed]
-        });
-
-    } catch (error) {
-        const endTime = Date.now();
-        const pingTime = endTime - startTime;
-        console.error('Error fetching server data from Application API:', error);
-        const errorEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('❌ Kesalahan Tak Terduga (Application API)')
-            .setDescription(`Terjadi kesalahan tak terduga saat mencoba mendapatkan status server.\n\`\`\`${error.message}\`\`\``)
-            .addFields({
-                name: 'API Ping (saat error)',
-                value: `\`${pingTime}ms\``,
-                inline: true
-            })
-            .setFooter({
-                text: `Update terakhir pada ${new Date().toLocaleString('id-ID', {
-                    timeZone: 'Asia/Jakarta'
-                })}`
-            });
-
-        channel.send({
-            embeds: [errorEmbed]
-        });
-    }
-}
-
-async function getServersResourceUsageAndSendToDiscord() {
-    const startTime = Date.now();
-    const channel = client.channels.cache.get(CHANNEL_ID);
+    const channel = await client.channels.fetch(CHANNEL_ID).catch(() => null);
 
     if (!channel) {
         console.error("Channel not found! Please check CHANNEL_ID in your .env file.");
@@ -353,32 +196,4 @@ async function getServersResourceUsageAndSendToDiscord() {
     }
 }
 
-client.on('ready', () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-    console.log("Bot is ready!");
 
-    getServersResourceUsageAndSendToDiscord();
-
-    setInterval(getServersResourceUsageAndSendToDiscord, 3600000); // 1 jam
-});
-
-client.on('messageCreate', async (msg) => {
-    if (msg.author.bot) return;
-
-    const messageContent = msg.content.toLowerCase();
-
-    if (messageContent === 'ping') {
-        msg.reply('pong');
-    }
-
-    if (messageContent === '!status' || messageContent === '!serverstatus') {
-        msg.channel.send("Memeriksa status server...");
-        await getServersStatusAndSendToDiscord();
-    }
-    if (messageContent === '!resourcetotal' || messageContent === '!totalusage') {
-        msg.channel.send("Memeriksa total penggunaan resource server...");
-        await getServersResourceUsageAndSendToDiscord();
-    }
-});
-
-client.login(DISCORD_API);
