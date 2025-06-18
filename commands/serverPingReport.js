@@ -41,13 +41,13 @@ function parseWindowsPing(output) {
 // parsing output ping yang Linux
 function parseLinuxPing(output) {
     const statsMatch = output.match(/(\d+) packets transmitted, (\d+) received, .* (\d+\.?\d*)% packet loss/);
-    const avgMatch = output.match(/rtt .* = .*\/(.*?)\//);
+    const rttMatch = output.match(/rtt min\/avg\/max\/mdev = ([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+) ms/);
 
     return {
-        loss: statsMatch?.[3] + '%' || 'unknown',
-        avgPing: avgMatch?.[1] + 'ms' || 'unknown',
-        min: 'unknown', 
-        max: 'unknown',
+        loss: statsMatch?.[3] || '0',
+        avgPing: rttMatch ? Math.round(parseFloat(rttMatch[2])) + 'ms' : 'unknown',
+        min: rttMatch ? Math.round(parseFloat(rttMatch[1])) + 'ms' : 'unknown',
+        max: rttMatch ? Math.round(parseFloat(rttMatch[3])) + 'ms' : 'unknown',
         sent: statsMatch?.[1] || '4',
         received: statsMatch?.[2] || '4',
         lost: ((parseInt(statsMatch?.[1]) || 4) - (parseInt(statsMatch?.[2]) || 0)).toString(),
